@@ -62,7 +62,7 @@ A comprehensive multilingual speech-to-text and text-to-speech system supporting
 
 ```bash
 # 1. Clone
-git clone https://github.com/yourusername/multilingual_stt_tts.git
+git clone https://github.com/shoibum/EchoLang.git
 cd multilingual_stt_tts
 
 # 2. Create & activate venv
