@@ -172,3 +172,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# model checkpoints
+models/
+~/.cache/whisper/
+~/.cache/huggingface/
+~/.cache/hf/

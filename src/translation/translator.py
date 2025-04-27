@@ -1,85 +1,53 @@
 """
-Translation module for multilingual text translation.
+Text translation via IndicTrans-2.
 """
 
-from typing import Dict
+from __future__ import annotations
+from typing import Dict, Tuple
 import torch
 from transformers import pipeline
-from src.config import LANGUAGES
-
-# ──────────────────────────────────────────────────
-# Map each supported pair to a real HF model ID.
-# ──────────────────────────────────────────────────
-PAIR2MODEL: Dict[tuple[str,str], str] = {
-    ("en", "hi"): "Helsinki-NLP/opus-mt-en-hi",
-    ("hi", "en"): "Helsinki-NLP/opus-mt-hi-en",
-    ("en", "kn"): "ai4bharat/indictrans2-en-indic-1B",
-    ("kn", "en"): "ai4bharat/indictrans2-indic-en-dist-200M",
-    # hi↔kn will fall back via English
-}
+from src.config import PAIR2MODEL, LANGUAGES, MODELS_DIR
 
 
 class Translator:
-    """
-    Translator class using Hugging Face Transformers for
-    multilingual text translation with automatic fallback.
-    """
-    
-    def __init__(self):
-        # HF pipeline expects device index: 0 for GPU, -1 for CPU
+    def __init__(self) -> None:
         self.device = 0 if torch.cuda.is_available() else -1
-        self.pipelines: Dict[str, pipeline] = {}
-        print(f"Using device: {'cuda' if self.device==0 else 'cpu'}")
-    
-    def _make_key(self, src: str, tgt: str) -> str:
-        return f"{src}-{tgt}"
-    
-    def load_model(self, src: str, tgt: str) -> None:
-        """Ensure a pipeline exists for src→tgt, or set up fallback via English."""
-        if src == tgt:
+        self.pipes: Dict[Tuple[str, str], pipeline] = {}
+
+    # ────────────────────────────────────────────────────
+    def _ensure(self, src: str, tgt: str) -> None:
+        if (src, tgt) in self.pipes or src == tgt:
             return
-        if src not in LANGUAGES or tgt not in LANGUAGES:
-            raise ValueError(f"Unsupported language: {src} or {tgt}")
-        
-        key = self._make_key(src, tgt)
-        if key in self.pipelines:
-            return
-        
+
         model_id = PAIR2MODEL.get((src, tgt))
-        if model_id:
-            print(f"Loading model {src}→{tgt}: {model_id}")
-            self.pipelines[key] = pipeline(
-                "translation",
-                model=model_id,
-                device=self.device,
-                trust_remote_code=True,   # ← allow custom code for IndicTrans2
-                max_length=512,
-            )
+        if not model_id:
+            # fall back via English
+            if src != "en":
+                self._ensure(src, "en")
+            if tgt != "en":
+                self._ensure("en", tgt)
             return
-        
-        # No direct model → fallback via English
-        print(f"No direct model for {src}→{tgt}, falling back via English")
-        if src != "en":
-            self.load_model(src, "en")
-        if tgt != "en":
-            self.load_model("en", tgt)
-    
+
+        self.pipes[(src, tgt)] = pipeline(
+            "translation",
+            model=model_id,
+            device=self.device,
+            cache_dir=str(MODELS_DIR / "hf"),
+            max_length=512,
+            trust_remote_code=True,
+        )
+
+    # ────────────────────────────────────────────────────
     def translate(self, text: str, src: str, tgt: str) -> str:
-        """
-        Translate *text* from *src* language to *tgt* language.
-        Falls back via English for unsupported direct pairs.
-        """
         if src == tgt:
             return text
-        
-        self.load_model(src, tgt)
-        
-        if (src, tgt) in PAIR2MODEL:
-            key = self._make_key(src, tgt)
-            out = self.pipelines[key](text)
+        self._ensure(src, tgt)
+
+        if (src, tgt) in self.pipes:
+            out = self.pipes[(src, tgt)](text, clean_up_tokenization_spaces=True)
             return out[0]["translation_text"]
-        
-        # Fallback via English
+
+        # two-step via English
         if src != "en":
             text = self.translate(text, src, "en")
         if tgt != "en":

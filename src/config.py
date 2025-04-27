@@ -1,42 +1,30 @@
 """
-Configuration settings for the multilingual STT/TTS project.
+Global config – Seamless M4T-Large ASR + IndicTrans-2 + XTTS-v2.
 """
-
-import os
 from pathlib import Path
 
-# Project directories
 PROJECT_ROOT = Path(__file__).parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
-AUDIO_DIR = DATA_DIR / "audio"
-MODELS_DIR = PROJECT_ROOT / "models"
+DATA_DIR     = PROJECT_ROOT / "data"
+AUDIO_DIR    = DATA_DIR / "audio"
+MODELS_DIR   = PROJECT_ROOT / "models"
+for p in (DATA_DIR, AUDIO_DIR, MODELS_DIR): p.mkdir(parents=True, exist_ok=True)
 
-# Create directories if they don't exist
-os.makedirs(DATA_DIR, exist_ok=True)
-os.makedirs(AUDIO_DIR, exist_ok=True)
-os.makedirs(MODELS_DIR, exist_ok=True)
+LANGUAGES = {"en": "English", "hi": "Hindi", "kn": "Kannada"}
 
-# Supported languages
-LANGUAGES = {
-    "en": "English",
-    "hi": "Hindi",
-    "kn": "Kannada"
+# ASR – we only keep the name for bookkeeping
+ASR_MODEL_ID = "facebook/seamless-m4t-large"     # Dense, GPU-safe :contentReference[oaicite:1]{index=1}
+
+# Translation (unchanged)
+PAIR2MODEL = {
+    ("en", "hi"): "ai4bharat/indictrans2-en-indic-1B",
+    ("hi", "en"): "ai4bharat/indictrans2-indic-en-1B",
+    ("en", "kn"): "ai4bharat/indictrans2-en-indic-1B",
+    ("kn", "en"): "ai4bharat/indictrans2-indic-en-1B",
 }
 
-# Whisper model configurations
-WHISPER_MODEL_SIZE = "base"  # Options: tiny, base, small, medium, large
+# TTS – XTTS-v2
+TTS_MODEL_ID = "coqui/XTTS-v2"
 
-# TTS configurations
-TTS_MODELS = {
-    "en": "tts_models/en/ljspeech/tacotron2-DDC",
-    "hi": "tts_models/hi/gagan/tacotron2-DDC",
-    "kn": "tts_models/multilingual/multi-dataset/your_tts"  # YourTTS can handle Kannada
-}
-
-# Translation model configurations
-TRANSLATION_MODEL = "Helsinki-NLP/opus-mt-{src}-{tgt}"
-
-# Web interface configurations
-GRADIO_THEME = "default"
-GRADIO_TITLE = "Multilingual Speech-to-Text and Text-to-Speech"
-GRADIO_DESCRIPTION = "Convert speech to text and text to speech in English, Hindi, and Kannada with translation capabilities."
+GRADIO_THEME  = "gradio/dark"
+GRADIO_TITLE  = "EchoLang · Seamless M4T + XTTS-v2"
+GRADIO_DESCRIPTION = "GPU-accelerated speech ↔ text with Meta Seamless M4T-Large."
