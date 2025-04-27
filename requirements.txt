@@ -1,29 +1,22 @@
-# Core dependencies
-torch>=2.0.0
-torchaudio>=2.0.0
-numpy>=1.20.0
-scipy>=1.7.0
-soundfile>=0.10.3
-librosa>=0.9.0
-gradio>=3.50.0
-requests>=2.26.0
-tqdm>=4.62.0
+# Base
+torch
+torchaudio
+numpy
+requests
+tqdm
 
-# STT dependencies
-fairseq>=0.12.0
-sentencepiece>=0.1.97
-huggingface-hub>=0.10.0
-seamless-communication>=1.0.0
+# Gradio UI
+gradio
 
-# Translation dependencies
-indicnlp>=0.1
-fairseq>=0.12.0
-sacrebleu>=2.3.0
+# Models & Processing
+# transformers>=4.30.0 # Keep for NLLB
+transformers>=4.30.0
+sentencepiece # Keep for NLLB tokenizer
+accelerate # Recommended for transformers, helps with device placement
+TTS>=0.22.0 # Coqui TTS
+soundfile
+faster-whisper>=0.10.0 # New STT Engine
 
-# TTS dependencies
-TTS>=0.17.0  # XTTS v2
-cython>=0.29.0
-pydub>=0.25.0
-
-# Utilities
-pyyaml>=6.0
+# Note: Removed fairseq, seamless_communication
+# Note: Transliteration library removed for now
+# indic-transliteration>=2.3.54
