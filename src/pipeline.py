@@ -1,168 +1,143 @@
-"""
-Pipeline module for connecting STT, Translation, and TTS modules.
-"""
-from src.stt.stt import SpeechToText
-from src.tts.tts import TextToSpeech
-from src.translation.translator import Translator
-from src.utils.audio import convert_audio_bytes_to_wav
-from src.config import LANGUAGES
-
-
-
-from typing import Dict, Optional, Tuple, Union, BinaryIO
+# src/pipeline.py
 import os
 import tempfile
+from typing import Dict, Optional, Union
+from pathlib import Path
 
-from src.stt.stt import SpeechToText
-from src.tts.tts import TextToSpeech
-from src.translation.translator import Translator
-from src.utils.audio import convert_audio_bytes_to_wav
-from src.config import LANGUAGES
+from .stt.stt import SpeechToText
+from .translation.translator import Translator
+from .tts.synthesizer import TextToSpeech
+from .utils.model_utils import ModelManager
+from .utils.language import LanguageCode
 
-class Pipeline:
+
+class EchoLangPipeline:
     """
-    Pipeline class for connecting STT, Translation, and TTS modules.
+    End-to-end pipeline for EchoLang.
     """
     
-    def __init__(self):
-        """Initialize the pipeline module."""
-        self.stt = SpeechToText()
-        self.tts = TextToSpeech()
-        self.translator = Translator()
-    
-    def speech_to_text(
-        self,
-        audio: Union[str, bytes, BinaryIO],
-        language: Optional[str] = None
-    ) -> Dict:
+    def __init__(self, model_manager: Optional[ModelManager] = None):
+        """Initialize the EchoLang pipeline."""
+        self.model_manager = model_manager or ModelManager()
+        self.stt = SpeechToText(self.model_manager)
+        self.translator = Translator(self.model_manager)
+        self.tts = TextToSpeech(self.model_manager)
+        
+    def speech_to_text(self, 
+                     audio_path: Union[str, Path],
+                     src_lang: str = LanguageCode.ENGLISH) -> Dict:
         """
         Convert speech to text.
-        Supports:
-         - file path (str)
-         - raw bytes (bytes)
-         - file‐like (BinaryIO)
+        
+        Args:
+            audio_path: Path to audio file
+            src_lang: Source language code
+            
+        Returns:
+            Dictionary with transcription results
         """
-        # 1) Raw bytes → use the bytes‐aware entrypoint
-        if isinstance(audio, (bytes, bytearray)):
-            return self.stt.transcribe_audio_bytes(audio, language)
-
-        # 2) Otherwise delegate directly
-        return self.stt.transcribe(audio, language)
-    
-    def text_to_speech(
-        self, 
-        text: str,
-        language: str,
-        output_path: Optional[str] = None
-    ) -> Union[str, bytes]:
+        return self.stt.transcribe(audio_path, src_lang)
+        
+    def text_to_speech(self,
+                      text: str,
+                      lang: str = LanguageCode.ENGLISH,
+                      speaker_audio: Optional[str] = None,
+                      speed: float = 1.0) -> Dict:
         """
         Convert text to speech.
         
         Args:
             text: Text to synthesize
-            language: Target language code
-            output_path: Path to save audio file (optional)
+            lang: Language code
+            speaker_audio: Path to speaker reference audio (optional)
+            speed: Speech speed factor
             
         Returns:
-            Path to audio file or audio bytes
+            Dictionary with synthesis results
         """
-        return self.tts.synthesize(text, language, output_path)
-    
-    def translate_text(
-        self, 
-        text: str,
-        source_language: str,
-        target_language: str
-    ) -> str:
+        return self.tts.synthesize(text, lang, speaker_audio, speed)
+        
+    def translate_text(self,
+                     text: str,
+                     src_lang: str = LanguageCode.ENGLISH,
+                     tgt_lang: str = LanguageCode.HINDI) -> Dict:
         """
-        Translate text between languages.
+        Translate text from source language to target language.
         
         Args:
             text: Text to translate
-            source_language: Source language code
-            target_language: Target language code
+            src_lang: Source language code
+            tgt_lang: Target language code
             
         Returns:
-            Translated text
+            Dictionary with translation results
         """
-        return self.translator.translate(text, source_language, target_language)
-    
-    def speech_to_translated_text(
-        self, 
-        audio: Union[str, bytes, BinaryIO],
-        source_language: Optional[str] = None,
-        target_language: str = "en"
-    ) -> Dict:
+        return self.translator.translate(text, src_lang, tgt_lang)
+        
+    def speech_to_translated_text(self,
+                                audio_path: Union[str, Path],
+                                src_lang: str = LanguageCode.ENGLISH,
+                                tgt_lang: str = LanguageCode.HINDI) -> Dict:
         """
         Convert speech to translated text.
         
         Args:
-            audio: Audio file path, bytes, or file-like object
-            source_language: Source language code (optional)
-            target_language: Target language code
+            audio_path: Path to audio file
+            src_lang: Source language code
+            tgt_lang: Target language code
             
         Returns:
-            Dict containing transcription, translation, and metadata
+            Dictionary with transcription and translation results
         """
-        # Transcribe audio
-        transcription = self.speech_to_text(audio, source_language)
+        # First transcribe the speech
+        transcription_result = self.speech_to_text(audio_path, src_lang)
         
-        # Determine source language if not provided
-        if source_language is None:
-            source_language = transcription.get("language", "en")
-        
-        # Translate text
-        translation = self.translate_text(
-            transcription["text"], 
-            source_language, 
-            target_language
+        # Then translate the transcription
+        translation_result = self.translate_text(
+            text=transcription_result["text"],
+            src_lang=src_lang,
+            tgt_lang=tgt_lang
         )
         
         return {
-            "transcription": transcription["text"],
-            "source_language": source_language,
-            "translation": translation,
-            "target_language": target_language
-            }
-    
-    def speech_to_translated_speech(
-        self, 
-        audio: Union[str, bytes, BinaryIO],
-        source_language: Optional[str] = None,
-        target_language: str = "en",
-        output_path: Optional[str] = None
-    ) -> Tuple[Dict, Union[str, bytes]]:
+            "transcription": transcription_result,
+            "translation": translation_result
+        }
+        
+    def speech_to_translated_speech(self,
+                                  audio_path: Union[str, Path],
+                                  src_lang: str = LanguageCode.ENGLISH,
+                                  tgt_lang: str = LanguageCode.HINDI,
+                                  speaker_audio: Optional[str] = None,
+                                  speed: float = 1.0) -> Dict:
         """
-        Convert speech in one language to speech in another language.
+        Convert speech to translated speech.
         
         Args:
-            audio: Audio file path, bytes, or file-like object
-            source_language: Source language code (optional)
-            target_language: Target language code
-            output_path: Path to save output audio file (optional)
+            audio_path: Path to audio file
+            src_lang: Source language code
+            tgt_lang: Target language code
+            speaker_audio: Path to speaker reference audio (optional)
+            speed: Speech speed factor
             
         Returns:
-            Tuple of (translation_info, audio_output)
+            Dictionary with complete pipeline results
         """
-        # Convert speech to translated text
-        translation_info = self.speech_to_translated_text(
-            audio, source_language, target_language
+        # First convert speech to translated text
+        speech_to_text_result = self.speech_to_translated_text(audio_path, src_lang, tgt_lang)
+        
+        # Then synthesize the translated text
+        translated_text = speech_to_text_result["translation"]["translated_text"]
+        
+        synthesis_result = self.text_to_speech(
+            text=translated_text,
+            lang=tgt_lang,
+            speaker_audio=speaker_audio,
+            speed=speed
         )
         
-        # Synthesize translated text
-        audio_output = self.text_to_speech(
-            translation_info["translation"], 
-            target_language,
-            output_path
-        )
-        
-        return translation_info, audio_output
-    
-    def supported_languages(self) -> Dict[str, str]:
-        """
-        Get supported languages.
-        
-        Returns:
-            Dict of language codes and names
-        """
-        return LANGUAGES.copy()
+        return {
+            "transcription": speech_to_text_result["transcription"],
+            "translation": speech_to_text_result["translation"],
+            "synthesis": synthesis_result
+        }

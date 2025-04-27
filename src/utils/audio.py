@@ -1,92 +1,72 @@
-"""
-Utility functions for audio processing.
-"""
-
+# src/utils/audio.py
 import os
-import io
-import tempfile
-from typing import Tuple, Optional
 import numpy as np
-import librosa
 import soundfile as sf
-from pydub import AudioSegment
+import torch
+import torchaudio
+from typing import Optional, Tuple, Union
 
-def load_audio(file_path: str, sample_rate: int = 16000) -> Tuple[np.ndarray, int]:
-    """
-    Load an audio file and resample it.
+class AudioProcessor:
+    """Audio processing utilities for EchoLang."""
     
-    Args:
-        file_path: Path to audio file
-        sample_rate: Target sample rate
+    @staticmethod
+    def load_audio(file_path: str, target_sr: int = 16000) -> Tuple[torch.Tensor, int]:
+        """
+        Load audio file and resample if necessary.
         
-    Returns:
-        Tuple of (audio_array, sample_rate)
-    """
-    audio, sr = librosa.load(file_path, sr=sample_rate)
-    return audio, sr
-
-def save_audio(audio: np.ndarray, file_path: str, sample_rate: int = 16000) -> str:
-    """
-    Save audio array to file.
+        Args:
+            file_path: Path to audio file
+            target_sr: Target sample rate
+            
+        Returns:
+            Tuple of (audio_tensor, sample_rate)
+        """
+        waveform, sample_rate = torchaudio.load(file_path)
+        
+        # Convert to mono if stereo
+        if waveform.shape[0] > 1:
+            waveform = torch.mean(waveform, dim=0, keepdim=True)
+            
+        # Resample if needed
+        if sample_rate != target_sr:
+            resampler = torchaudio.transforms.Resample(sample_rate, target_sr)
+            waveform = resampler(waveform)
+            sample_rate = target_sr
+            
+        return waveform, sample_rate
     
-    Args:
-        audio: Audio array
-        file_path: Output file path
-        sample_rate: Sample rate
+    @staticmethod
+    def save_audio(waveform: torch.Tensor, file_path: str, sample_rate: int = 24000) -> str:
+        """
+        Save audio tensor to file.
         
-    Returns:
-        Path to saved file
-    """
-    # Ensure directory exists
-    os.makedirs(os.path.dirname(os.path.abspath(file_path)), exist_ok=True)
+        Args:
+            waveform: Audio tensor
+            file_path: Output file path
+            sample_rate: Sample rate
+            
+        Returns:
+            Path to saved file
+        """
+        os.makedirs(os.path.dirname(os.path.abspath(file_path)), exist_ok=True)
+        
+        # Ensure waveform is on CPU and convert to numpy
+        if isinstance(waveform, torch.Tensor):
+            waveform = waveform.cpu().numpy()
+            
+        # Reshape if needed
+        if waveform.ndim == 1:
+            waveform = waveform.reshape(1, -1)
+        
+        # Normalize
+        if np.abs(waveform).max() > 1.0:
+            waveform = waveform / np.abs(waveform).max()
+            
+        sf.write(file_path, waveform.T, sample_rate)
+        return file_path
     
-    sf.write(file_path, audio, sample_rate)
-    return file_path
-
-def convert_audio_bytes_to_wav(audio_bytes: bytes, target_sr: int = 16000) -> bytes:
-    """
-    Convert audio bytes (possibly in various formats) to WAV format with specified sample rate.
-    
-    Args:
-        audio_bytes: Audio content as bytes
-        target_sr: Target sample rate
-        
-    Returns:
-        WAV audio bytes
-    """
-    # Save input bytes to a temporary file
-    with tempfile.NamedTemporaryFile(suffix=".tmp", delete=False) as temp_input:
-        temp_input_path = temp_input.name
-        temp_input.write(audio_bytes)
-    
-    try:
-        # Load with pydub which can handle various formats
-        audio = AudioSegment.from_file(temp_input_path)
-        
-        # Set channels and sample rate
-        audio = audio.set_channels(1)  # Mono
-        audio = audio.set_frame_rate(target_sr)
-        
-        # Export to WAV bytes
-        buffer = io.BytesIO()
-        audio.export(buffer, format="wav")
-        
-        return buffer.getvalue()
-    
-    finally:
-        # Clean up temporary file
-        if os.path.exists(temp_input_path):
-            os.unlink(temp_input_path)
-
-def get_audio_duration(file_path: str) -> float:
-    """
-    Get duration of audio file in seconds.
-    
-    Args:
-        file_path: Path to audio file
-        
-    Returns:
-        Duration in seconds
-    """
-    y, sr = librosa.load(file_path, sr=None)
-    return librosa.get_duration(y=y, sr=sr)
+    @staticmethod
+    def get_duration(file_path: str) -> float:
+        """Get duration of audio file in seconds."""
+        info = torchaudio.info(file_path)
+        return info.num_frames / info.sample_rate
