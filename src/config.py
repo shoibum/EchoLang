@@ -1,36 +1,31 @@
 # src/config.py
 """
-EchoLang – central configuration (Updated for FasterWhisper, MarianMT/NLLB, XTTS)
+EchoLang – central configuration (Updated for LibreTranslate API)
 """
 
 from pathlib import Path
 import torch
 
 # ──────────────────────────── Paths ──────────────────────────────
+# (Keep this section as is)
 ROOT        = Path(__file__).resolve().parent.parent
 DATA_DIR    = ROOT / "data"
 AUDIO_DIR   = DATA_DIR / "audio"
-MODELS_DIR = ROOT / "models" # Only XTTS models stored locally
+MODELS_DIR = ROOT / "models"
 
 for _dir in (DATA_DIR, AUDIO_DIR, MODELS_DIR):
     _dir.mkdir(parents=True, exist_ok=True)
 
 # ─────────────────────────── Languages ───────────────────────────
+# (Keep this section as is)
 LANGUAGES: dict[str, str] = {
     "en": "English",
     "hi": "Hindi",
     "kn": "Kannada",
 }
-# NLLB specific codes (needed for NLLB fallback)
-NLLB_LANG_CODES = {
-    "en": "eng_Latn",
-    "hi": "hin_Deva",
-    "kn": "kan_Knda",
-}
-# MarianMT generally uses simple 2-letter codes directly in the model name
 
 # ─────────────────────────── Device & Precision ──────────────────
-# Detect hardware
+# (Keep this section as is)
 if torch.backends.mps.is_available() and torch.backends.mps.is_built():
     APP_DEVICE = "mps"
     APP_TORCH_DTYPE = torch.float16
@@ -42,47 +37,32 @@ else:
     APP_TORCH_DTYPE = torch.float32
 
 # ────────────────────── FasterWhisper (ASR) ─────────────────────
-# Force CPU for faster-whisper due to MPS incompatibility observed
+# (Keep this section with the multiple models as configured before)
 FASTER_WHISPER_CONFIG = {
-    "small": {
-        "model_size_or_path": "small",
+    "kannada-small-ct2": { # Kannada specific
+        "model_path": str(ROOT / "models/kannada-small-ct2"),
         "device": "cpu",
-        "compute_type": "int8" # Use int8 for optimized CPU inference
+        "compute_type": "int8"
+    },
+    "hindi-small-ct2": { # Hindi specific
+        "model_path": str(ROOT / "models/hindi-small-ct2"),
+        "device": "cpu",
+        "compute_type": "int8"
+    },
+    "base-small-ct2": { # Base multilingual (for English & Default)
+        "model_path": str(ROOT / "models/base-small-ct2"),
+        "device": "cpu",
+        "compute_type": "int8"
     }
 }
-DEFAULT_FASTER_WHISPER_MODEL_KEY = "small"
 
-# ─────────────────── Translation Models ─────────────────────
-
-# --- MarianMT Models (Helsinki-NLP) ---
-# Specific models for supported language pairs
-MARIAN_CONFIG = {
-    "en-hi": {
-        "hf_id": "Helsinki-NLP/opus-mt-en-hi",
-        "model_type": "marian", # Add type for clarity
-    },
-    "hi-en": {
-        "hf_id": "Helsinki-NLP/opus-mt-hi-en",
-        "model_type": "marian",
-    },
-    # No dedicated en-kn or kn-en found, will use NLLB fallback
-}
-
-# --- NLLB Models (Facebook/Meta) ---
-# Fallback for pairs not covered by MarianMT (e.g., Kannada)
-NLLB_CONFIG = {
-    "nllb-distilled-600M": {
-        "hf_id": "facebook/nllb-200-distilled-600M",
-        "model_type": "nllb", # Add type for clarity
-        # Requires specific lang codes (see NLLB_LANG_CODES)
-    },
-}
-# Define default NLLB model key to use as fallback
-DEFAULT_NLLB_MODEL_KEY = "nllb-distilled-600M"
+# ─────────────────── Translation Models (LibreTranslate API) ────
+# --- REMOVED NLLB/MARIAN/MYMEMORY CONFIGS ---
+LIBRETRANSLATE_URL = "https://libretranslate.com/" # Public instance
 
 
 # ─────────────────────────── XTTS-v2 (TTS) ───────────────────────
-# XTTS will run on CPU due to MPS incompatibility observed
+# (Keep this section as is, referring to DEFAULT_XTTS_MODEL_KEY)
 XTTS_V2_CONFIG = {
     "default": {
         "id": "xtts_v2",
@@ -97,11 +77,12 @@ XTTS_V2_CONFIG = {
 }
 DEFAULT_XTTS_MODEL_KEY = "default"
 
+
 # ─────────────────────────── Gradio UI ───────────────────────────
-GRADIO_TITLE:       str = "EchoLang 🔊 (FasterWhisper+Marian/NLLB+XTTS)" # Keep title
+GRADIO_TITLE:       str = "EchoLang 🔊 (LibreTranslate API)" # Updated title
 GRADIO_DESCRIPTION: str = (
     "Multilingual Speech ⇆ Text (English · हिन्दी · ಕನ್ನಡ)\n"
-    "Powered by FasterWhisper, MarianMT (en↔hi), NLLB (en↔kn), and XTTS-v2." # Clarify model usage
+    "Powered by FasterWhisper (STT), LibreTranslate API (Translation), MMS-TTS (kn TTS), and XTTS-v2 (en/hi TTS)." # Updated description
 )
 GRADIO_THEME:       str = "soft"
 
@@ -110,13 +91,12 @@ __all__ = [
     # Paths
     "ROOT", "DATA_DIR", "AUDIO_DIR", "MODELS_DIR",
     # Languages
-    "LANGUAGES", "NLLB_LANG_CODES",
+    "LANGUAGES",
     # Device
     "APP_DEVICE", "APP_TORCH_DTYPE",
     # Model Configs
-    "FASTER_WHISPER_CONFIG", "DEFAULT_FASTER_WHISPER_MODEL_KEY",
-    "MARIAN_CONFIG", # Keep Marian
-    "NLLB_CONFIG", "DEFAULT_NLLB_MODEL_KEY", # Keep NLLB
+    "FASTER_WHISPER_CONFIG",
+    "LIBRETRANSLATE_URL", # Added API URL
     "XTTS_V2_CONFIG", "DEFAULT_XTTS_MODEL_KEY",
     # Gradio
     "GRADIO_TITLE", "GRADIO_DESCRIPTION", "GRADIO_THEME",

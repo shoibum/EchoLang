@@ -18,6 +18,7 @@ from .components import (
 try:
     from .. import config
 except ImportError:
+    # Allow running directly for testing? Unlikely needed if main.py is entry point
     import sys
     sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
     import config
@@ -88,12 +89,12 @@ def create_app():
             ---
             ### About EchoLang Models
 
-            * **Speech-to-Text (STT):** FasterWhisper ({config.DEFAULT_FASTER_WHISPER_MODEL_KEY} model via CTranslate2)
+            * **Speech-to-Text (STT):** FasterWhisper (Fine-tuned kn/hi, Base en models via CTranslate2)
             * **Machine Translation (MT):** Meta NLLB ({config.DEFAULT_NLLB_MODEL_KEY}) via Transformers
             * **Text-to-Speech (TTS):** Coqui XTTS-v2 via TTS library
 
             `transformers` models (NLLB) are cached in `~/.cache/huggingface/hub`.
-            FasterWhisper models are converted and cached (often under `~/.cache/huggingface/hub/models--guillaumekln--faster-whisper-*`).
+            FasterWhisper models (CTranslate2 format) used here are stored locally in `{config.MODELS_DIR}`.
             XTTS-v2 model files are stored in `{config.MODELS_DIR / 'xtts_v2'}`.
             Check console logs for download/conversion progress and status.
             """

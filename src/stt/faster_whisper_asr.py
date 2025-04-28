@@ -5,99 +5,106 @@ from pathlib import Path
 import time
 import itertools
 
-# Use relative imports for utils and config
+# Removed relative config import - config passed directly
+# Use relative imports for utils
 from ..utils.model_utils import ModelManager # May not be needed if config handles all
 from ..utils.language import LanguageCode
+# Import main config to check APP_DEVICE for warning
 try:
-    from .. import config
+    from .. import config as main_config
 except ImportError:
+    # Handle running file directly if necessary, though unlikely in final app
     import sys
     sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
-    import config
+    import config as main_config
+
 
 logger = logging.getLogger(__name__)
 
 try:
     from faster_whisper import WhisperModel
-    # from faster_whisper.utils import format_timestamp # If timestamp formatting needed
     logger.debug("Successfully imported faster_whisper.")
 except ImportError as e:
     logger.error("Failed to import faster-whisper. Is it installed? (pip install faster-whisper)", exc_info=True)
-    # Set WhisperModel to None or raise specific error if critical
     WhisperModel = None
-    # raise ImportError("Could not import faster_whisper.") from e
 
 class FasterWhisperASRModel:
     """
-    Wrapper for FasterWhisper model using CTranslate2 backend.
+    Wrapper for a specific FasterWhisper model using CTranslate2 backend.
+    Loads model based on provided configuration.
     """
 
-    def __init__(self, model_manager: Optional[ModelManager] = None):
+    # MODIFIED: __init__ now takes a specific model_config dictionary
+    def __init__(self, model_config: Dict, model_key: str):
         if WhisperModel is None:
              raise RuntimeError("faster-whisper library is not installed or failed to import.")
 
-        # Get config details from central config.py
-        self.model_key = config.DEFAULT_FASTER_WHISPER_MODEL_KEY
-        model_config = config.FASTER_WHISPER_CONFIG.get(self.model_key)
-        if not model_config:
-            raise ValueError(f"Config not found for faster-whisper model key '{self.model_key}' in config.FASTER_WHISPER_CONFIG.")
+        self.model_key = model_key # Store the key for logging
+        self.model_config = model_config
 
-        self.model_size = model_config.get("model_size_or_path")
-        self.device = model_config.get("device")
-        self.compute_type = model_config.get("compute_type")
+        # Get details from the provided config dictionary
+        self.model_path = self.model_config.get("model_path") # Expecting path now
+        self.device = self.model_config.get("device")
+        self.compute_type = self.model_config.get("compute_type")
         self.model: Optional[WhisperModel] = None # Lazy load model
 
-        if not self.model_size:
-            raise ValueError(f"Missing 'model_size_or_path' in FASTER_WHISPER_CONFIG for key '{self.model_key}'.")
+        if not self.model_path:
+            raise ValueError(f"Missing 'model_path' in FASTER_WHISPER_CONFIG for key '{self.model_key}'.")
 
-        logger.info(f"Initializing FasterWhisperASRModel: size='{self.model_size}', target_device='{self.device}', compute_type='{self.compute_type}'")
+        logger.info(f"Initializing FasterWhisperASRModel '{self.model_key}': path='{self.model_path}', target_device='{self.device}', compute_type='{self.compute_type}'")
 
     def load_model(self):
-        """Loads the FasterWhisper model. Conversion happens automatically on first load."""
+        """Loads the FasterWhisper model from the specified path."""
         if self.model is not None:
-            logger.debug("FasterWhisper model already loaded.")
+            logger.debug(f"FasterWhisper model '{self.model_key}' already loaded.")
             return
 
-        logger.info(f"Loading faster-whisper model: '{self.model_size}'...")
+        logger.info(f"Loading faster-whisper model '{self.model_key}' from path: '{self.model_path}'...")
         logger.info(f"Will use device='{self.device}' with compute_type='{self.compute_type}'.")
-        # Warn if using CPU fallback from MPS/CUDA intention
-        if config.APP_DEVICE != self.device and self.device == "cpu":
-             logger.warning(f"Configured faster-whisper device is '{self.device}', but intended app device was '{config.APP_DEVICE}'. Using CPU.")
-        elif config.APP_DEVICE == "mps" and self.device == "mps":
-             logger.info("Attempting to use MPS device for faster-whisper.")
+
+        # Check if the model path exists
+        if not Path(self.model_path).exists():
+             error_msg = f"Model directory not found for key '{self.model_key}': {self.model_path}. Did the conversion complete successfully?"
+             logger.error(error_msg)
+             raise FileNotFoundError(error_msg)
+        if not (Path(self.model_path) / "model.bin").exists():
+            error_msg = f"'model.bin' not found in directory for key '{self.model_key}': {self.model_path}. Is this a correctly converted CTranslate2 model directory?"
+            logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
+
+        # Warn if using CPU fallback from MPS/CUDA intention (using main config APP_DEVICE)
+        # Note: This check might be less relevant now if all models run on CPU anyway
+        if main_config.APP_DEVICE != self.device and self.device == "cpu":
+             logger.warning(f"Configured faster-whisper device for '{self.model_key}' is '{self.device}', but intended app device was '{main_config.APP_DEVICE}'. Using CPU.")
+        elif main_config.APP_DEVICE == "mps" and self.device == "mps":
+             logger.info(f"Attempting to use MPS device for faster-whisper model '{self.model_key}'.")
 
         try:
-            # Download and conversion to CTranslate2 format happens automatically
-            # by faster-whisper if the model size isn't found in cache.
-            # Cache location usually ~/.cache/huggingface/hub/models--guillaumekln--faster-whisper-<model_size>
+            # Load the CTranslate2 model directly from the path
             start_load_time = time.time()
             self.model = WhisperModel(
-                self.model_size,
+                self.model_path, # Load from directory path
                 device=self.device,
                 compute_type=self.compute_type
-                # cpu_threads=4, # Optional: Set number of threads for CPU
-                # num_workers=1, # Optional: For multi-GPU dataloading
             )
             end_load_time = time.time()
-            logger.info(f"Faster-whisper model '{self.model_size}' loaded successfully in {end_load_time - start_load_time:.2f}s.")
+            logger.info(f"Faster-whisper model '{self.model_key}' loaded successfully from {self.model_path} in {end_load_time - start_load_time:.2f}s.")
 
         except Exception as e:
-            logger.error(f"Error loading faster-whisper model '{self.model_size}': {e}", exc_info=True)
+            logger.error(f"Error loading faster-whisper model '{self.model_key}' from {self.model_path}: {e}", exc_info=True)
             self.model = None
-            # Provide specific hints if possible
             if "mps" in str(e).lower():
                  logger.error("Loading failed. This might indicate an MPS incompatibility with CTranslate2/FasterWhisper.")
                  logger.error("Consider changing 'device' to 'cpu' in FASTER_WHISPER_CONFIG in config.py and restarting.")
-            elif "module 'ctranslate2' has no attribute 'Device'" in str(e) or "CTranslate2" in str(e):
+            elif "CTranslate2" in str(e):
                  logger.error("CTranslate2 library might be missing or corrupted. Try reinstalling: pip install -U ctranslate2 faster-whisper")
 
-            # Re-raise or handle as appropriate for the application lifecycle
-            raise RuntimeError(f"Failed to load faster-whisper model: {e}") from e
+            raise RuntimeError(f"Failed to load faster-whisper model '{self.model_key}': {e}") from e
 
     def transcribe(self, audio_path: Union[str, Path],
                    src_lang: Optional[str] = None) -> Dict:
         """
-        Transcribe audio file using FasterWhisper.
+        Transcribe audio file using the loaded FasterWhisper model instance.
 
         Args:
             audio_path: Path to audio file.
@@ -108,22 +115,21 @@ class FasterWhisperASRModel:
             Dictionary with transcription results {'text': str, 'language': str}
         """
         if self.model is None:
-            logger.info("Faster-whisper model not loaded. Calling load_model()...")
+            logger.info(f"Faster-whisper model '{self.model_key}' not loaded. Calling load_model()...")
             try:
                 self.load_model()
             except Exception as load_err:
-                 logger.error(f"Failed to load faster-whisper model during transcribe call: {load_err}", exc_info=True)
-                 return {"text": f"ERROR: Model load failed - {type(load_err).__name__}", "language": src_lang or "unknown"}
+                 logger.error(f"Failed to load faster-whisper model '{self.model_key}' during transcribe call: {load_err}", exc_info=True)
+                 return {"text": f"ERROR: Model '{self.model_key}' load failed - {type(load_err).__name__}", "language": src_lang or "unknown"}
             if self.model is None: # Should not happen if load_model raises error, but check anyway
-                 error_msg = "Faster-whisper model could not be loaded. Cannot transcribe."
+                 error_msg = f"Faster-whisper model '{self.model_key}' could not be loaded. Cannot transcribe."
                  logger.error(error_msg)
-                 return {"text": "ERROR: Model not loaded", "language": src_lang or "unknown"}
+                 return {"text": f"ERROR: Model '{self.model_key}' not loaded", "language": src_lang or "unknown"}
 
         audio_path_str = str(audio_path)
-        # Faster-whisper uses 2-letter codes, or None for auto-detect. Our internal codes match.
         language_hint = src_lang
 
-        logger.info(f"Starting faster-whisper transcription for: {audio_path_str}, Language hint: {language_hint}")
+        logger.info(f"Starting transcription with model '{self.model_key}' for: {audio_path_str}, Language hint: {language_hint}")
 
         if not Path(audio_path_str).is_file():
              error_msg = f"Audio file not found: {audio_path_str}"
@@ -132,38 +138,30 @@ class FasterWhisperASRModel:
 
         try:
             start_time = time.time()
-            # See faster-whisper docs for more options: beam_size, vad_filter, temperature, etc.
-            # Using VAD filter can improve accuracy on long files with silence.
             segments, info = self.model.transcribe(
                 audio_path_str,
                 language=language_hint,
                 beam_size=5,
-                vad_filter=True, # Enable VAD filter
-                vad_parameters=dict(min_silence_duration_ms=500), # Default VAD params
-                # task="transcribe", # Default is transcribe
-                # temperature=0.0, # Default temperature
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500),
             )
 
             # Concatenate text from all segments
-            # Need to handle the generator properly
-            # Use itertools.chain to handle potential StopIteration if segments is empty
             full_text = "".join(s.text for s in segments).strip()
-
             end_time = time.time()
 
             detected_language = info.language
             lang_prob = info.language_probability
             duration = info.duration
 
-            logger.info(f"Faster-whisper transcription successful in {end_time - start_time:.2f}s (Audio duration: {duration:.2f}s).")
+            logger.info(f"Model '{self.model_key}' transcription successful in {end_time - start_time:.2f}s (Audio duration: {duration:.2f}s).")
             logger.info(f"Detected language: {detected_language} (Probability: {lang_prob:.2f})")
-            logger.info(f"Result: '{full_text[:150]}...'")
+            # Limit log length
+            log_text = full_text[:150].replace('\n', ' ') + ('...' if len(full_text) > 150 else '')
+            logger.info(f"Result: '{log_text}'")
 
-            # Return format consistent with previous STT implementation
-            # Use detected language if available, otherwise fall back to hint or unknown
+
             final_lang = detected_language if detected_language else (src_lang or "unknown")
-
-            # Transliteration logic is removed here. Re-add if needed.
 
             return {
                 "text": full_text,
@@ -171,7 +169,6 @@ class FasterWhisperASRModel:
             }
 
         except Exception as e:
-            logger.error(f"Error during faster-whisper transcription process for {audio_path_str}: {e}", exc_info=True)
-            # Check for specific CTranslate2/MPS errors if possible
+            logger.error(f"Error during transcription with model '{self.model_key}' for {audio_path_str}: {e}", exc_info=True)
             error_detail = str(e).split('\n')[0][:200]
             return {"text": f"ERROR: Transcription failed ({error_detail})", "language": src_lang or "unknown"}

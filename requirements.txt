@@ -16,7 +16,3 @@ accelerate # Recommended for transformers, helps with device placement
 TTS>=0.22.0 # Coqui TTS
 soundfile
 faster-whisper>=0.10.0 # New STT Engine
-
-# Note: Removed fairseq, seamless_communication
-# Note: Transliteration library removed for now
-# indic-transliteration>=2.3.54
