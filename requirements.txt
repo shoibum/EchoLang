@@ -1,18 +1,24 @@
+# requirements.txt
+
 # Base
 torch
 torchaudio
 numpy
 requests
 tqdm
+protobuf
 
 # Gradio UI
 gradio
 
 # Models & Processing
-# transformers>=4.30.0 # Keep for NLLB
-transformers>=4.30.0
-sentencepiece # Keep for NLLB tokenizer
-accelerate # Recommended for transformers, helps with device placement
+transformers>=4.30.0 # Needed for IndicTrans2 & MMS-TTS
+sentencepiece # Needed by some tokenizers
+accelerate # Recommended for transformers
 TTS>=0.22.0 # Coqui TTS
 soundfile
-faster-whisper>=0.10.0 # New STT Engine
+faster-whisper>=0.10.0
+ctranslate2>=3.0.0
+
+# IndicTransToolkit is installed separately via setup.sh from GitHub:
+# pip install git+https://github.com/VarunGumma/IndicTransToolkit.git

@@ -54,18 +54,29 @@ echo "   Activating virtual environment for subsequent commands..."
 source "$VENV_DIR/bin/activate" || source "$VENV_DIR/Scripts/activate" || { echo >&2 "‼️ Failed to activate venv."; exit 1; }
 echo "   Virtual environment activated for script."
 
+# Upgrade pip
+echo "🔧 Upgrading pip..."
+$PIP_CMD install --upgrade pip
+
 # Install required packages
 echo "📦 Installing required packages from requirements.txt..."
 $PIP_CMD install -r requirements.txt
+echo "🛠️ Installing IndicTransToolkit from GitHub..."
+$PIP_CMD install git+https://github.com/VarunGumma/IndicTransToolkit.git
 
-# Create necessary directories (only XTTS now)
-echo "📁 Creating model directories (for XTTS)..."
-mkdir -p models/xtts_v2/speakers # Ensure speakers dir exists
+# Create necessary directories
+echo "📁 Creating model directories..."
+mkdir -p models/xtts_v2/speakers # Ensure speakers dir exists for XTTS
+mkdir -p models/kannada-small-ct2 # Placeholder for converted STT
+mkdir -p models/hindi-small-ct2   # Placeholder for converted STT
+mkdir -p models/base-small-ct2    # Placeholder for converted STT
+
 
 # Download a small test file (optional)
 echo "🌐 Downloading test audio file (optional)..."
 mkdir -p test_data
-curl -L "https://github.com/openai/whisper/raw/main/tests/jfk.flac" -o test_data/test_en.flac
+# Use curl with -f to fail silently if file exists or error occurs, -s for silent, -L follow redirects
+curl -fsL "https://github.com/openai/whisper/raw/main/tests/jfk.flac" -o test_data/test_en.flac || echo "   -> Test file download skipped or failed."
 
 
 # --- Completion ---
@@ -81,5 +92,7 @@ else
     echo "      (PowerShell)  : .\\$VENV_DIR\\Scripts\\Activate.ps1"
 fi
 echo ""
-echo "➡️ Next step: Run 'python main.py'"
+echo "➡️ Next steps:"
+echo "   1. Ensure you have converted the required FasterWhisper STT models into the 'models/' directory (see README.md Quick Start)."
+echo "   2. Run the application: python main.py"
 echo ""

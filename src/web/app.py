@@ -5,9 +5,8 @@ from pathlib import Path
 import logging
 import sys
 
-# Use relative imports for pipeline, model_utils, components, and config
+# Use relative imports
 from ..pipeline import EchoLangPipeline
-# from ..utils.model_utils import ModelManager # Not needed directly here now
 from .components import (
     create_stt_tab,
     create_tts_tab,
@@ -18,16 +17,13 @@ from .components import (
 try:
     from .. import config
 except ImportError:
-    # Allow running directly for testing? Unlikely needed if main.py is entry point
     import sys
     sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
     import config
 
-# Configure logging (basic example, consider moving to main.py or a dedicated logging setup)
-# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__) # Setup logger (assuming config elsewhere)
+logger = logging.getLogger(__name__)
 
-# Global pipeline instance (lazy initialization)
+# Global pipeline instance
 pipeline_instance = None
 
 def get_pipeline():
@@ -36,7 +32,6 @@ def get_pipeline():
     if pipeline_instance is None:
         logger.info("Initializing global EchoLangPipeline instance...")
         try:
-            # ModelManager is created internally by Pipeline now if not passed
             pipeline_instance = EchoLangPipeline()
             logger.info("Global EchoLangPipeline instance initialized successfully.")
         except Exception as e:
@@ -52,7 +47,7 @@ def create_app():
         pipeline = get_pipeline()
     except RuntimeError as e:
          logger.error("Pipeline initialization failed. Creating error UI.")
-         with gr.Blocks(title="EchoLang - Error", theme=gr.themes.Soft()) as app:
+         with gr.Blocks(title="EchoLang - Error", theme=config.GRADIO_THEME) as app: # Use theme from config
                gr.Markdown(f"""
                # EchoLang Initialization Error
                Could not initialize the application backend. Please check the logs.
@@ -60,46 +55,50 @@ def create_app():
                """)
          return app
 
-    with gr.Blocks(title=config.GRADIO_TITLE, theme=config.GRADIO_THEME) as app:
-        gr.Markdown(
-            f"""
-            # {config.GRADIO_TITLE}
+    # --- Main App Structure ---
+    with gr.Blocks(title="EchoLang", theme=config.GRADIO_THEME) as app: # Simpler title
 
-            {config.GRADIO_DESCRIPTION}
+        # --- Minimal Header: Centered Title using HTML ---
+        gr.HTML("<h1 style='text-align: center; margin-bottom: 1rem'>EchoLang</h1>")
+        # --- End Minimal Header ---
 
-            This app runs locally on your device ({config.APP_DEVICE}). Models are downloaded to the Hugging Face cache or `./models`.
-            """
-        )
-
+        # --- Tabs ---
         with gr.Tabs():
             logger.debug("Creating STT tab...")
             create_stt_tab(pipeline)
+
             logger.debug("Creating TTS tab...")
             create_tts_tab(pipeline)
+
             logger.debug("Creating Translation tab...")
             create_translation_tab(pipeline)
+
             logger.debug("Creating Speech -> Translated Text tab...")
             create_speech_to_translated_text_tab(pipeline)
+
             logger.debug("Creating Speech -> Translated Speech tab...")
             create_speech_to_translated_speech_tab(pipeline)
 
-        # --- Updated "About" section ---
-        gr.Markdown(
-            f"""
-            ---
-            ### About EchoLang Models
-
-            * **Speech-to-Text (STT):** FasterWhisper (Fine-tuned kn/hi, Base en models via CTranslate2)
-            * **Machine Translation (MT):** Meta NLLB ({config.DEFAULT_NLLB_MODEL_KEY}) via Transformers
-            * **Text-to-Speech (TTS):** Coqui XTTS-v2 via TTS library
-
-            `transformers` models (NLLB) are cached in `~/.cache/huggingface/hub`.
-            FasterWhisper models (CTranslate2 format) used here are stored locally in `{config.MODELS_DIR}`.
-            XTTS-v2 model files are stored in `{config.MODELS_DIR / 'xtts_v2'}`.
-            Check console logs for download/conversion progress and status.
-            """
-        )
-        # --- End of updated section ---
+        # --- "About" Section using HTML (Invalid Comment Removed) ---
+        # Construct the HTML string
+        about_html = f"""
+        <hr>
+        <h3>About This Application</h3>
+        <p>{config.GRADIO_DESCRIPTION.replace('<0xF0><0x9F><0x94><0x8A>', '🔊')}</p>
+        <ul>
+            <li><strong>Device:</strong> This app runs locally on your <strong>{config.APP_DEVICE.upper()}</strong>.</li>
+            <li><strong>Models Used:</strong>
+                <ul>
+                    <li><strong>STT:</strong> FasterWhisper (Fine-tuned kn/hi, Base en - CPU)</li>
+                    <li><strong>Translation:</strong> IndicTrans2 Distilled (Local - CPU)</li>
+                    <li><strong>TTS:</strong> Coqui XTTS-v2 (en/hi - CPU) / Facebook MMS-TTS (kn - CPU)</li>
+                </ul>
+            </li>
+             <li><strong>Model Storage:</strong> Models are downloaded to Hugging Face cache or <code>./models</code>. Check console logs for details.</li>
+        </ul>
+        """
+        gr.HTML(value=about_html)
+        # --- End of About section ---
 
     logger.info("Gradio App interface created successfully.")
     return app
@@ -109,7 +108,6 @@ def launch_app(share: bool = False, server_port: int = 7860):
     try:
         app = create_app()
         logger.info(f"Launching Gradio app on port {server_port}. Share={share}")
-        # Can add server_name="0.0.0.0" to allow access from other devices on network
         app.launch(share=share, server_port=server_port)
     except Exception as e:
          logger.error(f"Failed to create or launch the Gradio app: {e}", exc_info=True)
