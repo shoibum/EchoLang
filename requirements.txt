@@ -7,18 +7,19 @@ numpy
 requests
 tqdm
 protobuf
+sounddevice # Added for external recording script
 
 # Gradio UI
 gradio
 
 # Models & Processing
-transformers>=4.30.0 # Needed for IndicTrans2 & MMS-TTS
-sentencepiece # Needed by some tokenizers
-accelerate # Recommended for transformers
-TTS>=0.22.0 # Coqui TTS
-soundfile
+transformers>=4.30.0
+sentencepiece
+accelerate
+TTS>=0.22.0
+soundfile # Also needed by recording script
 faster-whisper>=0.10.0
 ctranslate2>=3.0.0
 
-# IndicTransToolkit is installed separately via setup.sh from GitHub:
+# IndicTransToolkit installed separately via:
 # pip install git+https://github.com/VarunGumma/IndicTransToolkit.git
