@@ -42,13 +42,13 @@ class Translator:
     """
 
     def __init__(self):
+        # (Keep __init__ method exactly as in Response #47)
         if IndicProcessor is None:
              raise RuntimeError("IndicTransToolkit is not installed or failed to import.")
         if AutoTokenizer is None or AutoModelForSeq2SeqLM is None:
              raise RuntimeError("transformers library is not installed or failed to import.")
 
         self.device = config.APP_DEVICE # Will be 'cpu' after config change
-        # Sets correct dtype based on device
         self.torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
         logger.info(f"Initializing Distilled IndicTrans2 Translator. Device: {self.device}, Dtype: {self.torch_dtype}")
 
@@ -67,22 +67,21 @@ class Translator:
         self._load_models()
 
     def _load_model_helper(self, model_id: str, direction: str):
-        """Helper to load a single model and tokenizer."""
+        # (Keep _load_model_helper method exactly as in Response #47)
         logger.info(f"Loading {direction} model: {model_id}")
         start_time = time.time()
         tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
         model = AutoModelForSeq2SeqLM.from_pretrained(
             model_id,
             trust_remote_code=True,
-            torch_dtype=self.torch_dtype # Will be float32 for CPU
-        ).to(self.device) # Will move to CPU
+            torch_dtype=self.torch_dtype
+        ).to(self.device)
         model.eval()
         logger.info(f"Loaded {direction} model in {time.time() - start_time:.2f}s")
         return tokenizer, model
 
     def _load_models(self):
-        """Loads all three distilled IndicTrans2 models."""
-        # (Keep the _load_models method exactly as in Response #47)
+        # (Keep _load_models method exactly as in Response #47)
         logger.info("Loading Distilled IndicTrans2 models...")
         try:
             self.tokenizer_en_indic, self.model_en_indic = self._load_model_helper(self.en_indic_model_id, "En->Indic")
@@ -96,25 +95,43 @@ class Translator:
             self.tokenizer_indic_indic = self.model_indic_indic = None
             raise RuntimeError(f"Failed to load one or more Distilled IndicTrans2 models") from e
 
+    # --- MODIFIED HELPER FUNCTION ---
     def _translate_batch(self, batch: List[str], model, tokenizer, src_lang_code: str, tgt_lang_code: str) -> List[str]:
-        """Helper function to handle translation for a batch."""
-        # (Keep the _translate_batch method exactly as in Response #49 - includes tokenizer context fix)
+        """Helper function to handle translation for a batch using greedy search."""
         if not model or not tokenizer:
              raise RuntimeError("Translation model or tokenizer is not loaded.")
+        # Preprocess
         processed_batch = self.indic_processor.preprocess_batch(batch, src_lang=src_lang_code, tgt_lang=tgt_lang_code)
+        # Tokenize
         inputs = tokenizer(processed_batch, padding="longest", truncation=True, max_length=256, return_tensors="pt", return_attention_mask=True).to(self.device)
+        # Generate using Greedy Search (num_beams=1)
         with torch.inference_mode():
-            outputs = model.generate(**inputs, num_beams=5, max_length=256, num_return_sequences=1)
+            # --- MODIFIED: Use num_beams=1 (or remove it) ---
+            outputs = model.generate(
+                **inputs,
+                num_beams=1, # Use greedy search
+                max_length=256,
+                num_return_sequences=1
+                )
+            # --- END MODIFICATION ---
+        # Decode using the target language's context
         with tokenizer.as_target_tokenizer():
-            decoded_tokens = tokenizer.batch_decode(outputs, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+            decoded_tokens = tokenizer.batch_decode(
+                outputs,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=True
+            )
+        # Postprocess
         final_translations = self.indic_processor.postprocess_batch(decoded_tokens, lang=tgt_lang_code)
         return final_translations
+    # --- END MODIFIED HELPER FUNCTION ---
+
 
     def translate(self,
                   text: str,
-                  src_lang: str,
+                  src_lang: str, # Expect internal codes: 'en', 'hi', 'kn'
                   tgt_lang: str) -> Dict:
-        # (Keep the main translate method exactly as in Response #47 - selects correct model)
+        # (Keep the main translate method exactly as in Response #47 - it calls the modified helper)
         translated_text = ""
         error_message = None
         start_time = time.time()
@@ -147,7 +164,7 @@ class Translator:
                 direction = "Indic->Indic"
 
             if model and tokenizer and self.indic_processor:
-                logger.info(f"Translating ({direction}) using Distilled IndicTrans2 ({self.device}): '{text[:50]}...'") # Device will now be CPU
+                logger.info(f"Translating ({direction}) using Distilled IndicTrans2 ({self.device}): '{text[:50]}...'")
                 try:
                     translations = self._translate_batch([text], model, tokenizer, indic_src, indic_tgt)
                     translated_text = translations[0] if translations else ""
