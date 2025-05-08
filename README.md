@@ -1,4 +1,3 @@
-```markdown
 # EchoLang – Multilingual Speech Pipeline
 
 **English · हिंदी · ಕನ್ನಡ**
