@@ -108,9 +108,13 @@ reset_models.sh            # Script to reset some local models
 4.  **UI:** Gradio handles file uploads/inputs and displays outputs.
 
 ```
-Speech  ──► 1. STT (FasterWhisper) ──► Text ──► 2. (Optional) MT (IndicTrans2) ──► Text ──► 3. (Optional) TTS (MMS/XTTS) ──► Audio Out
-Text    ───────────────────────────────────────────┘                                       │
-└────────────────────────────────────────────────────────────────────────────────────────┘
+Speech ──► 1. STT (FasterWhisper)
+       ──► 2. (Optional) MT (IndicTrans2)
+       ──► 3. (Optional) TTS (XTTS/MMS)
+       ──► Audio Output
+
+Text ──► 2. (Optional) MT ──► 3. (Optional) TTS ──► Audio Output
+
 ```
 
 ## 📚 Model References
