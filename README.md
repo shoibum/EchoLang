@@ -82,7 +82,7 @@ reset_models.sh            # Script to reset some local models
 
 4.  **(Included in setup.sh)** Install the IndicTransToolkit separately (if setup.sh didn't):
     ```bash
-    pip install git+[https://github.com/VarunGumma/IndicTransToolkit.git](https://github.com/VarunGumma/IndicTransToolkit.git)
+    pip install git+https://github.com/VarunGumma/IndicTransToolkit.git
     ```
 
 5.  Convert the required FasterWhisper STT models into the `./models/` directory:
