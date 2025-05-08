@@ -1,5 +1,3 @@
-Okay, here is the complete, corrected `README.md` file reflecting the final state of your project (FasterWhisper, Distilled IndicTrans2 on CPU, XTTS/MMS TTS, `main.py` entry point). You can copy and paste this into your `README.md` file.
-
 ```markdown
 # EchoLang – Multilingual Speech Pipeline
 
